@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>和田地区渔业资源流向图</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts/map/js/china.js"></script>
+    <style>
+        * {margin: 0; padding: 0; box-sizing: border-box;}
+        html, body {width: 100%; height: 100%; overflow: hidden;}
+
+        /* GeoScene原版呼吸加载动画 */
+        .loading-screen {
+            position: fixed;
+            inset: 0;
+            background-color: #FFFFFF;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 0.8s ease-out;
+        }
+        .loading-screen.hide {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .load-logo {
+            width: 120px;
+            animation: breathe 2s ease-in-out infinite;
+        }
+        @keyframes breathe {
+            0% {transform: scale(1);}
+            50% {transform: scale(0.92);}
+            100% {transform: scale(1);}
+        }
+        .loading-text {
+            margin-top: 16px;
+            font-size: 22px;
+            color: #3D6665;
+            font-family: "Microsoft YaHei", Arial, sans-serif;
+        }
+
+        #map {
+            width: 100%;
+            height: 100vh;
+            background-color: #ffffff;
+            opacity: 0;
+            transition: opacity 0.6s ease-in;
+        }
+        #map.show {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="loading-screen" id="loader">
+        <div class="load-logo">🌍</div>
+        <p class="loading-text">和田渔业资源流向图 加载中...</p>
+    </div>
+
+    <div id="map"></div>
+
+    <script>
+        // 严格根据Excel表格提取的OD数据（无缺失空行数据，共6条）
+        const rawData = [
+            {Type:"技术",From_City:"和田地区",From_X:79.920537,From_Y:37.11388,To_City:"宁波大学",To_X:121.636479,To_Y:29.908539},
+            {Type:"技术",From_City:"和田地区",From_X:79.920537,From_Y:37.11388,To_City:"中国水产科学研究院南海水产研究所",To_X:113.311445,To_Y:23.095904},
+            {Type:"技术",From_City:"和田地区",From_X:79.920537,From_Y:37.11388,To_City:"天津市水产研究所",To_X:117.231525,To_Y:39.070228},
+            {Type:"原料",From_City:"和田地区",From_X:79.920537,From_Y:37.11388,To_City:"海南三亚崖州区",To_X:109.167372,To_Y:18.359129},
+            {Type:"原料",From_City:"和田地区",From_X:79.920537,From_Y:37.11388,To_City:"四川眉山专业水产繁育基地",To_X:103.848417,To_Y:30.077113},
+            {Type:"技术",From_City:"和田地区",From_X:79.920537,From_Y:37.11388,To_City:"浙江大学",To_X:120.081964,To_Y:30.302761}
+        ];
+
+        const techList = rawData.filter(item => item.Type === "技术");
+        const materialList = rawData.filter(item => item.Type === "原料");
+
+        const chartDom = document.getElementById('map');
+        const myChart = echarts.init(chartDom);
+
+        const option = {
+            backgroundColor: 'transparent',
+            tooltip: {show: false},
+            legend: {
+                left: 30,
+                top: 30,
+                padding: [12,18],
+                backgroundColor: 'rgba(255,255,255,0.92)',
+                borderColor: 'rgba(80,160,220,0.45)',
+                borderWidth: 1,
+                textStyle: {
+                    color: '#1a1a1a',
+                    fontSize: 15,
+                    fontWeight: 500
+                },
+                itemWidth: 30,
+                itemHeight: 4,
+                data: [
+                    {
+                        name: '技术流入',
+                        icon: 'line',
+                        lineStyle: {color:'#00e5ff',width:3}
+                    },
+                    {
+                        name: '原料物资流出',
+                        icon: 'line',
+                        lineStyle: {color:'#ffdd00',width:3}
+                    }
+                ],
+                selectedMode: false
+            },
+            geo: {
+                map: 'china',
+                roam: true,
+                zoom: 0.88,
+                center: [97, 36],
+                aspectScale: 0.70,
+                label: {show: false},
+                itemStyle: {
+                    areaColor: '#ffffff',
+                    borderColor: 'rgba(90,145,185,0.7)',
+                    borderWidth: 1.1
+                },
+                emphasis: {itemStyle: {areaColor: '#f4f9ff'}}
+            },
+            series: [
+                // 技术流入主线
+                {
+                    name: "技术流入",
+                    type: "lines",
+                    coordinateSystem: "geo",
+                    zlevel: 1,
+                    lineStyle: {
+                        width: 1.6,
+                        curveness: 0.32,
+                        color: "#00e5ff",
+                        opacity: 0.58,
+                        shadowBlur: 8,
+                        shadowColor: "rgba(0,229,255,0.35)"
+                    },
+                    data: techList.map(item => ({
+                        coords: [[item.To_X, item.To_Y], [item.From_X, item.From_Y]]
+                    }))
+                },
+                {
+                    name: "技术粒子",
+                    type: "lines",
+                    coordinateSystem: "geo",
+                    zlevel: 3,
+                    effect: {
+                        show:true,
+                        trailLength:0.028,
+                        period:4.2,
+                        symbolSize:4.5
+                    },
+                    lineStyle: {width:0, curveness:0.32},
+                    data: techList.map(item => ({
+                        coords: [[item.To_X, item.To_Y], [item.From_X, item.From_Y]]
+                    }))
+                },
+                // 原料流出主线
+                {
+                    name: "原料物资流出",
+                    type: "lines",
+                    coordinateSystem: "geo",
+                    zlevel: 1,
+                    lineStyle: {
+                        width: 1.6,
+                        curveness: 0.32,
+                        color: "#ffdd00",
+                        opacity: 0.58,
+                        shadowBlur: 8,
+                        shadowColor: "rgba(255,221,0,0.35)"
+                    },
+                    data: materialList.map(item => ({
+                        coords: [[item.From_X, item.From_Y], [item.To_X, item.To_Y]]
+                    }))
+                },
+                {
+                    name: "原料粒子",
+                    type: "lines",
+                    coordinateSystem: "geo",
+                    zlevel: 3,
+                    effect: {
+                        show:true,
+                        trailLength:0.028,
+                        period:5.0,
+                        symbolSize:4.5
+                    },
+                    lineStyle: {width:0, curveness:0.32},
+                    data: materialList.map(item => ({
+                        coords: [[item.From_X, item.From_Y], [item.To_X, item.To_Y]]
+                    }))
+                },
+                // 城市节点
+                {
+                    name: "城市节点",
+                    type: 'effectScatter',
+                    coordinateSystem: 'geo',
+                    zlevel: 4,
+                    symbolSize: 7,
+                    rippleEffect: {brushType:'stroke', period:2.4, scale:3.2, color:'#222222'},
+                    label: {
+                        show: true,
+                        position: 'top',
+                        color: '#1a1a1a',
+                        fontSize: 12,
+                        fontWeight: 500,
+                        formatter: '{b}'
+                    },
+                    itemStyle: {color:'#222222', shadowBlur:8, shadowColor:'#cccccc'},
+                    data: rawData.flatMap(item=>[
+                        {name:item.From_City, value:[item.From_X,item.From_Y]},
+                        {name:item.To_City, value:[item.To_X,item.To_Y]}
+                    ])
+                }
+            ]
+        };
+
+        const loader = document.getElementById('loader');
+        const mapDom = document.getElementById('map');
+        setTimeout(() => {
+            loader.classList.add('hide');
+            setTimeout(() => {
+                myChart.setOption(option);
+                mapDom.classList.add('show');
+            }, 800);
+        }, 3500);
+
+        window.addEventListener('resize', () => myChart.resize());
+    </script>
+</body>
+</html>
