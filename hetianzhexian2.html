@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>水产品统计年鉴</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #f8fafc;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+        }
+        .card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 24px;
+            padding: 48px;
+            width: 100%;
+            max-width: 1800px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.04);
+        }
+        .chart-wrap {
+            position: relative;
+            height: 840px;
+            width: 100%;
+        }
+        .legend-custom {
+            display: flex;
+            justify-content: center;
+            gap: 28px;
+            margin-top: 28px;
+            flex-wrap: wrap;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+            color: #475569;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.2s;
+            padding: 6px 14px;
+            border-radius: 20px;
+            background: #f1f5f9;
+            border: 1px solid transparent;
+        }
+        .legend-item:hover { background: #e2e8f0; }
+        .legend-item.hidden { opacity: 0.3; text-decoration: line-through; background: #f1f5f9; }
+        .legend-line {
+            width: 20px;
+            height: 3px;
+            border-radius: 2px;
+        }
+        footer {
+            margin-top: 24px;
+            color: #94a3b8;
+            font-size: 0.8rem;
+        }
+    </style>
+<base target="_blank">
+</head>
+<body>
+    <div class="card">
+        <div class="chart-wrap">
+            <canvas id="lineChart"></canvas>
+        </div>
+        <div class="legend-custom" id="customLegend"></div>
+    </div>
+    <footer>数据来源：统计年鉴 | 2000—2022</footer>
+
+    <script>
+        const years = [2000,2001,2002,2003,2004,2005,2006,2007,2008,2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022];
+        const total = [623,600,747,821,883,982,1162,1469,1605,1753,1788,1810,1979,2267,2291,2399,2597,2662,2733,2856,2387,5276,5252];
+        const aqua  = [622,601,660,727,883,982,996,1057,1201,1325,1646,1690,1816,2044,2051,2279,2465,2508,2572,2712,2255,3730,4780];
+        const value = [560,570,597,646,751,884,1162,1469,1605,1928,2146,2354,2672,3403,3588,3664,3896,4526,4783,4783,4586,5028,8757];
+
+        const ctx2d = document.createElement('canvas').getContext('2d');
+        function createGradient(ctx, color) {
+            const g = ctx.createLinearGradient(0, 0, 0, 400);
+            g.addColorStop(0, color.replace('0.08)', '0.15)'));
+            g.addColorStop(1, color.replace('0.08)', '0.01)'));
+            return g;
+        }
+
+        const datasets = [
+            {
+                label: '水产品产量',
+                data: total,
+                borderColor: '#3b82f6',
+                backgroundColor: 'rgba(59,130,246,0.08)',
+                fill: false,
+                tension: 0.4,
+                borderWidth: 2,
+                pointRadius: 0,
+                pointHoverRadius: 7,
+                pointBackgroundColor: '#3b82f6',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2.5,
+                pointHitRadius: 20,
+                yAxisID: 'y',
+                order: 1
+            },
+            {
+                label: '养殖产量',
+                data: aqua,
+                borderColor: '#10b981',
+                fill: false,
+                tension: 0.4,
+                borderWidth: 2,
+                pointRadius: 0,
+                pointHoverRadius: 7,
+                pointBackgroundColor: '#10b981',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2.5,
+                pointHitRadius: 20,
+                yAxisID: 'y',
+                order: 2
+            },
+            {
+                label: '总产值',
+                data: value,
+                borderColor: '#f59e0b',
+                fill: false,
+                tension: 0.4,
+                borderWidth: 2,
+                pointRadius: 0,
+                pointHoverRadius: 7,
+                pointBackgroundColor: '#f59e0b',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2.5,
+                pointHitRadius: 20,
+                yAxisID: 'y1',
+                order: 3
+            }
+        ];
+
+        const crosshairPlugin = {
+            id: 'crosshair',
+            afterDraw: (chart) => {
+                const active = chart.tooltip;
+                if (!active || active.opacity === 0 || !active.dataPoints || active.dataPoints.length === 0) return;
+                const ctx = chart.ctx;
+                const x = active.dataPoints[0].element.x;
+                const top = chart.chartArea.top;
+                const bottom = chart.chartArea.bottom;
+                ctx.save();
+                ctx.beginPath();
+                ctx.moveTo(x, top);
+                ctx.lineTo(x, bottom);
+                ctx.lineWidth = 1;
+                ctx.strokeStyle = 'rgba(148,163,184,0.4)';
+                ctx.setLineDash([5, 5]);
+                ctx.stroke();
+                ctx.restore();
+            }
+        };
+
+        const ctx = document.getElementById('lineChart').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: { labels: years, datasets: datasets },
+            plugins: [crosshairPlugin],
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: 'rgba(15,23,42,0.92)',
+                        titleColor: '#f1f5f9',
+                        bodyColor: '#e2e8f0',
+                        borderColor: 'rgba(148,163,184,0.15)',
+                        borderWidth: 1,
+                        padding: 14,
+                        cornerRadius: 14,
+                        titleFont: { size: 14, weight: 'bold' },
+                        bodyFont: { size: 13 },
+                        displayColors: true,
+                        boxPadding: 6,
+                        usePointStyle: true,
+                        callbacks: {
+                            label: function(context) {
+                                let unit = context.dataset.yAxisID === 'y1' ? ' 万元' : ' 吨';
+                                return ' ' + context.dataset.label + ': ' + context.parsed.y.toLocaleString() + unit;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { color: 'rgba(226,232,240,0.5)', drawBorder: false },
+                        ticks: { color: '#94a3b8', font: { size: 12 }, padding: 8 }
+                    },
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        title: { display: true, text: '产量（吨）', color: '#3b82f6', font: { size: 11, weight: '600' }, padding: { bottom: 8 } },
+                        grid: { color: 'rgba(226,232,240,0.5)', drawBorder: false },
+                        ticks: { color: '#94a3b8', font: { size: 11 }, padding: 6 }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        title: { display: true, text: '总产值（万元）', color: '#f59e0b', font: { size: 11, weight: '600' }, padding: { bottom: 8 } },
+                        grid: { drawOnChartArea: false, drawBorder: false },
+                        ticks: { color: '#94a3b8', font: { size: 11 }, padding: 6 }
+                    }
+                }
+            }
+        });
+
+        const legendContainer = document.getElementById('customLegend');
+        datasets.forEach((ds, idx) => {
+            const item = document.createElement('div');
+            item.className = 'legend-item';
+            item.innerHTML = `<span class="legend-line" style="background:${ds.borderColor};"></span>${ds.label}`;
+            item.onclick = () => {
+                const meta = chart.getDatasetMeta(idx);
+                meta.hidden = meta.hidden === null ? !chart.data.datasets[idx].hidden : null;
+                item.classList.toggle('hidden', meta.hidden);
+                chart.update();
+            };
+            legendContainer.appendChild(item);
+        });
+    </script>
+</body>
+</html>
