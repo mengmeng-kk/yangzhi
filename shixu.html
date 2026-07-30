@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>和田盐碱NDSI时空联动分析图</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{
+    width:100%;
+    height:100%;
+    overflow:hidden;
+    background:#F5F7FA;
+}
+
+/* 加载动画 */
+.loading-screen {
+    position: fixed;
+    inset: 0;
+    background: #fff;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    transition: opacity 0.8s ease-out;
+}
+.loading-screen.hide{opacity:0;pointer-events:none}
+.load-logo{width:120px;animation:breathe 2s infinite ease-in-out}
+@keyframes breathe{0%{transform:scale(1)}50%{transform:scale(0.92)}100%{transform:scale(1)}}
+.load-text{margin-top:16px;font-size:22px;color:#3D6665}
+
+/* 主容器 */
+.wrap{
+    width:100%;
+    height:100vh;
+    display:flex;
+    flex-direction:column;
+    gap:0;
+    visibility:hidden;
+}
+.wrap.show{visibility:visible}
+
+/* 外层统一大容器：左右包裹为整体，单一边框 */
+.row-container{
+    display:flex;
+    flex:1;
+    min-height:0;
+    width:100%;
+    background:#ffffff;
+    border:1px solid #DCE3E9;
+    border-radius:0;
+    overflow:hidden;
+}
+
+/* 左侧地图，取消独立边框 */
+.ndsi-box{
+    flex: 6;
+    width:100%;
+    height:100%;
+    position:relative;
+    overflow:hidden;
+    background: #ffffff;
+}
+
+/* 右侧折线图，取消独立边框，中间分割细线 */
+#line-chart{
+    flex: 4;
+    width:100%;
+    height:100%;
+    min-width:0;
+    background:#ffffff;
+    border-left:1px solid #E8EDF1;
+}
+
+/* 地图影像 */
+.map-img{
+    position:absolute;
+    width:100%;
+    height:100%;
+    object-fit:contain;
+    object-position:center;
+    opacity:0;
+    transition:opacity 0.8s ease;
+}
+.map-img.active{opacity:1}
+
+/* 拖拽放大镜 */
+.selection-box{
+    position:absolute;
+    width:26%;
+    height:26%;
+    left:24%;
+    top:26%;
+    border:3px solid #ff4d4f;
+    border-radius:16px;
+    cursor:move;
+    z-index:3;
+    overflow:hidden;
+    background:#ffffff;
+}
+.selection-box::after{
+    content:"拖动放大框";
+    position:absolute;
+    top:-24px;
+    left:0;
+    background:#ff4d4f;
+    color:#fff;
+    font-size:13px;
+    padding:2px 8px;
+    border-radius:4px;
+    white-space:nowrap;
+}
+.lens-canvas{
+    width:100%;
+    height:100%;
+    pointer-events:none;
+}
+
+/* 年份按钮 */
+.ctrl-bar{
+    display:flex;
+    align-items:center;
+    gap:20px;
+    padding:12px 16px;
+    background:#F5F7FA;
+    flex-shrink:0;
+}
+.year-btns{display:flex;gap:10px}
+.year-btns span{
+    width:68px;height:36px;
+    line-height:36px;
+    text-align:center;
+    background:#E8EDF1;color:#222;
+    border-radius:3px;cursor:pointer
+}
+.year-btns span.active{
+    background:#4A90D9;color:#fff
+}
+</style>
+</head>
+<body>
+<div class="loading-screen" id="loader">
+    <div class="load-logo">🌍</div>
+    <p class="load-text">盐碱地NDSI时序分析加载中...</p>
+</div>
+
+<div class="wrap" id="page">
+    <!-- 左右布局，整体包裹在同一个白色容器，视觉一体化 -->
+    <div class="row-container">
+        <div class="ndsi-box" id="imgBox">
+            <img class="map-img" src="map1.png" data-year="2000">
+            <img class="map-img" src="map2.png" data-year="2005">
+            <img class="map-img" src="map3.png" data-year="2010">
+            <img class="map-img" src="map4.png" data-year="2015">
+            <img class="map-img" src="map5.png" data-year="2020">
+            <img class="map-img" src="map6.png" data-year="2025">
+
+            <div class="selection-box" id="selectBox">
+                <canvas class="lens-canvas" id="canvas"></canvas>
+            </div>
+        </div>
+
+        <div id="line-chart"></div>
+    </div>
+
+    <div class="ctrl-bar">
+        <div class="year-btns">
+            <span>2000</span>
+            <span>2005</span>
+            <span>2010</span>
+            <span>2015</span>
+            <span>2020</span>
+            <span>2025</span>
+        </div>
+    </div>
+</div>
+
+<script>
+const yearsArr = ['2000','2005','2010','2015','2020','2025'];
+const ndsiMin = [-0.444794, -0.473639, -0.508308, -0.481111, -0.467136, -0.456840];
+const ndsiMax = [0.669237, 0.732692, 0.635361, 0.770657, 0.720949, 0.650399];
+
+let curIdx = 0;
+let loopTimer = null;
+let resumeTimer = null;
+const LOOP_INTERVAL = 3000;
+const WAIT_RESUME_TIME = 8000;
+
+const mapImgList = document.querySelectorAll('.map-img');
+const btnList = document.querySelectorAll('.year-btns span');
+const loader = document.getElementById('loader');
+const pageWrap = document.getElementById('page');
+const lineDom = document.getElementById('line-chart');
+const selectBox = document.getElementById('selectBox');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const imgBox = document.getElementById('imgBox');
+
+let lineChart = null;
+const ZOOM = 2.0;
+const IMG_RAW_W = 1133;
+const IMG_RAW_H = 960;
+
+let isDragging = false;
+let startX, startY, boxLeft, boxTop;
+
+function resizeCanvas(){
+    canvas.width = selectBox.clientWidth;
+    canvas.height = selectBox.clientHeight;
+}
+resizeCanvas();
+new ResizeObserver(resizeCanvas).observe(selectBox);
+
+selectBox.addEventListener('mousedown', (e)=>{
+    isDragging = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    boxLeft = selectBox.offsetLeft;
+    boxTop = selectBox.offsetTop;
+});
+document.addEventListener('mousemove', (e)=>{
+    if(!isDragging) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    let newLeft = boxLeft + dx;
+    let newTop = boxTop + dy;
+    const maxLeft = imgBox.clientWidth - selectBox.clientWidth;
+    const maxTop = imgBox.clientHeight - selectBox.clientHeight;
+    newLeft = Math.max(0, Math.min(newLeft, maxLeft));
+    newTop = Math.max(0, Math.min(newTop, maxTop));
+    selectBox.style.left = newLeft + 'px';
+    selectBox.style.top = newTop + 'px';
+    drawLens();
+});
+document.addEventListener('mouseup', ()=>{isDragging = false;});
+
+function drawLens(){
+    const activeImg = mapImgList[curIdx];
+    const boxX = selectBox.offsetLeft;
+    const boxY = selectBox.offsetTop;
+    const boxW = selectBox.clientWidth;
+    const boxH = selectBox.clientHeight;
+    const containerW = imgBox.clientWidth;
+    const containerH = imgBox.clientHeight;
+    const imgRatio = IMG_RAW_W / IMG_RAW_H;
+    const containerRatio = containerW / containerH;
+
+    let dispW, dispH, dispOffsetX, dispOffsetY;
+    if(containerRatio > imgRatio){
+        dispH = containerH;
+        dispW = dispH * imgRatio;
+        dispOffsetX = (containerW - dispW) / 2;
+        dispOffsetY = 0;
+    }else{
+        dispW = containerW;
+        dispH = dispW / imgRatio;
+        dispOffsetX = 0;
+        dispOffsetY = (containerH - dispH) / 2;
+    }
+    const scaleToRawX = IMG_RAW_W / dispW;
+    const scaleToRawY = IMG_RAW_H / dispH;
+    const srcX = (boxX - dispOffsetX) * scaleToRawX;
+    const srcY = (boxY - dispOffsetY) * scaleToRawY;
+    const srcW = boxW * scaleToRawX;
+    const srcH = boxH * scaleToRawY;
+
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.drawImage(activeImg,srcX, srcY, srcW, srcH,0,0,canvas.width * ZOOM, canvas.height * ZOOM);
+}
+
+function refreshView(){
+    mapImgList.forEach(img=>img.classList.remove('active'));
+    mapImgList[curIdx].classList.add('active');
+    btnList.forEach(b=>b.classList.remove('active'));
+    btnList[curIdx].classList.add('active');
+    if(lineChart){
+        lineChart.dispatchAction({type:'highlight',dataIndex:curIdx});
+    }
+    setTimeout(drawLens, 120);
+}
+function stopLoop(){clearInterval(loopTimer);}
+function startLoop(){
+    clearInterval(loopTimer);
+    loopTimer = setInterval(()=>{
+        curIdx = (curIdx + 1) % 6;
+        refreshView();
+    }, LOOP_INTERVAL);
+}
+function resetResumeTimer(){
+    clearTimeout(resumeTimer);
+    resumeTimer = setTimeout(()=>startLoop(), WAIT_RESUME_TIME);
+}
+
+btnList.forEach((btn,i)=>{
+    btn.onclick = ()=>{
+        curIdx = i;
+        refreshView();
+        stopLoop();
+        resetResumeTimer();
+    };
+});
+
+window.addEventListener('resize',()=>{
+    if(lineChart) lineChart.resize();
+    resizeCanvas();
+    drawLens();
+})
+
+window.onload = function(){
+    setTimeout(()=>{
+        loader.classList.add('hide');
+        pageWrap.classList.add('show');
+        lineChart = echarts.init(lineDom);
+
+        const chartOption = {
+            backgroundColor:'#ffffff',
+            tooltip:{
+                trigger:'axis',
+                backgroundColor:'rgba(255,255,255,0.96)',
+                borderColor:'#dce3e9',
+                borderWidth:1,
+                borderRadius:8,
+                padding:[10,14],
+                textStyle:{fontSize:15,color:'#222'},
+                formatter:function(params){
+                    const idx = params[0].dataIndex;
+                    return `<div style="font-weight:bold;margin-bottom:4px">${yearsArr[idx]}</div>
+                    NDSI最小值：${ndsiMin[idx].toFixed(6)}<br/>
+                    NDSI最大值：${ndsiMax[idx].toFixed(6)}`
+                }
+            },
+            grid:{left:75,right:55,top:60,bottom:115},
+            xAxis:{
+                type:'category',
+                data:yearsArr,
+                axisLine:{lineStyle:{color:'#a0b0c2',width:1.8}},
+                axisTick:{alignWithLabel:true},
+                axisLabel:{fontSize:16,fontWeight:500,color:'#2c3e50'},
+                splitLine:{show:false}
+            },
+            yAxis:{
+                name:'NDSI指数',
+                nameTextStyle:{fontSize:16,fontWeight:500,color:'#2c3e50',padding:[0,0,0,14]},
+                axisLine:{lineStyle:{color:'#a0b0c2',width:1.8}},
+                axisLabel:{fontSize:15,color:'#2c3e50'},
+                splitLine:{
+                    show:true,
+                    lineStyle:{color:'#dde3ec',width:1,type:'dashed'}
+                }
+            },
+            legend:{
+                left:'center',bottom:25,
+                textStyle:{fontSize:18,color:'#2c3e50'},
+                itemWidth:40,
+                itemHeight:6,
+                itemGap:24,
+                data:['NDSI最大值','NDSI最小值']
+            },
+            series:[
+                {
+                    name:'NDSI最大值',
+                    type:'line',
+                    smooth:true,
+                    data:ndsiMax,
+                    lineStyle:{
+                        width:5,
+                        color:'#c0392b',
+                        shadowBlur:10,
+                        shadowColor:'rgba(192,57,43,0.35)'
+                    },
+                    symbol:'circle',
+                    symbolSize:12,
+                    itemStyle:{color:'#c0392b',borderColor:'#fff',borderWidth:3},
+                    emphasis:{symbolSize:16}
+                },
+                {
+                    name:'NDSI最小值',
+                    type:'line',
+                    smooth:true,
+                    data:ndsiMin,
+                    lineStyle:{
+                        width:5,
+                        color:'#2962a8',
+                        shadowBlur:10,
+                        shadowColor:'rgba(41,98,168,0.35)'
+                    },
+                    symbol:'circle',
+                    symbolSize:12,
+                    itemStyle:{color:'#2962a8',borderColor:'#fff',borderWidth:3},
+                    emphasis:{symbolSize:16}
+                }
+            ]
+        };
+        lineChart.setOption(chartOption);
+        lineChart.on('click',(params)=>{
+            curIdx = params.dataIndex;
+            refreshView();
+            stopLoop();
+            resetResumeTimer();
+        });
+        refreshView();
+        startLoop();
+    },1200);
+};
+</script>
+</body>
+</html>
