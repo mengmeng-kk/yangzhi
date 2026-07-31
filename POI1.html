@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>点位叠加展示</title>
+<style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+body {
+  padding: 20px;
+  background: #f5f7fa;
+  font-family: "Microsoft YaHei", "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ========== 顶部标题 ========== */
+.page-header {
+  width: 1000px;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.header-bar {
+  width: 4px;
+  height: 24px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #1976d2, #42a5f5);
+}
+.header-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1565c0;
+  letter-spacing: 1px;
+}
+
+/* ========== 主布局：左按钮 + 右地图 ========== */
+.main-wrap {
+  width: 1000px;
+  max-width: 100%;
+  display: flex;
+  gap: 14px;
+  align-items: stretch;
+}
+
+/* ========== 按钮控制区（左侧） ========== */
+.btn-group {
+  width: 150px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.switch-btn {
+  padding: 14px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  border: 2px solid transparent;
+  cursor: pointer;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  letter-spacing: 1px;
+  transition: all 0.2s ease;
+  flex: 1;
+}
+.switch-btn .btn-icon {
+  font-size: 16px;
+}
+
+/* 餐饮按钮 */
+.switch-btn[data-target="food"] {
+  background: rgba(108, 64, 0, 0.08);
+  color: #6C4000;
+  border-color: rgba(108, 64, 0, 0.2);
+}
+.switch-btn[data-target="food"].active {
+  background: #6C4000;
+  color: #fff;
+  border-color: #6C4000;
+  box-shadow: 0 3px 10px rgba(108, 64, 0, 0.3);
+}
+
+/* 住宿按钮 */
+.switch-btn[data-target="hotel"] {
+  background: rgba(232, 157, 0, 0.08);
+  color: #C27A00;
+  border-color: rgba(232, 157, 0, 0.2);
+}
+.switch-btn[data-target="hotel"].active {
+  background: #E89D00;
+  color: #fff;
+  border-color: #E89D00;
+  box-shadow: 0 3px 10px rgba(232, 157, 0, 0.3);
+}
+
+/* 公共设施按钮 */
+.switch-btn[data-target="public"] {
+  background: rgba(0, 122, 194, 0.08);
+  color: #005a8f;
+  border-color: rgba(0, 122, 194, 0.2);
+}
+.switch-btn[data-target="public"].active {
+  background: #007AC2;
+  color: #fff;
+  border-color: #007AC2;
+  box-shadow: 0 3px 10px rgba(0, 122, 194, 0.3);
+}
+
+.switch-btn:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+}
+.switch-btn:active {
+  transform: translateY(0);
+}
+
+/* ========== 地图容器 ========== */
+.map-box {
+  flex: 1;
+  height: 420px;
+  position: relative;
+  border: 1px solid #d0d8e0;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 60, 120, 0.08);
+  background: #fff;
+}
+.map-base {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 1;
+  object-fit: contain;
+}
+.point-item {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 2;
+  mix-blend-mode: multiply;
+  transition: opacity 0.3s ease;
+  object-fit: contain;
+}
+.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ========== 响应式 ========== */
+@media (max-width: 1040px) {
+  .page-header, .main-wrap {
+    width: 100%;
+  }
+  .map-box {
+    height: auto;
+    aspect-ratio: 1000 / 420;
+  }
+}
+</style>
+</head>
+<body>
+
+<!-- 顶部标题 -->
+<div class="page-header">
+  <div class="header-bar"></div>
+  <div class="header-title">点位叠加展示</div>
+</div>
+
+<!-- 主布局：左按钮 + 右地图 -->
+<div class="main-wrap">
+  <!-- 控制按钮 -->
+  <div class="btn-group">
+    <button class="switch-btn active" data-target="food">
+      <span class="btn-icon">🍽️</span> 餐饮
+    </button>
+    <button class="switch-btn active" data-target="hotel">
+      <span class="btn-icon">🏨</span> 住宿
+    </button>
+    <button class="switch-btn active" data-target="public">
+      <span class="btn-icon">🏛️</span> 公共设施
+    </button>
+  </div>
+
+  <!-- 地图容器 -->
+  <div class="map-box">
+    <!-- 底层PNG底图 -->
+    <img class="map-base" src="base.png" alt="底图">
+    <!-- 上层点位svg，自动去除白底 -->
+    <img class="point-item" id="food" src="food.svg" alt="餐饮">
+    <img class="point-item" id="hotel" src="hotel.svg" alt="住宿">
+    <img class="point-item" id="public" src="public.svg" alt="公共设施">
+  </div>
+</div>
+
+<script>
+const btns = document.querySelectorAll('.switch-btn');
+btns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    btn.classList.toggle('active');
+    const targetId = btn.getAttribute('data-target');
+    document.getElementById(targetId).classList.toggle('hidden');
+  });
+});
+</script>
+
+</body>
+</html>
