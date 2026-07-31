@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>点位叠加展示</title>
+<style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+body {
+  padding: 20px;
+  background: #fff;
+}
+/* 地图容器，尺寸贴合你的图大小 */
+.map-box {
+  width: 1590px;
+  height: 960px;
+  position: relative;
+  border: 1px solid #ccc;
+}
+/* 底层底图 z-index最小 */
+.map-base {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 1;
+}
+/* 点位图层：multiply自动过滤白色背景 */
+.point-item {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 2;
+  mix-blend-mode: multiply;
+  transition: opacity 0.25s ease;
+}
+/* 隐藏样式 */
+.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+/* 按钮区域 */
+.btn-group {
+  margin-top: 16px;
+  display: flex;
+  gap: 12px;
+}
+.btn-group button {
+  padding: 9px 22px;
+  font-size: 15px;
+  background-color: #ffd440;
+  border: none;
+  cursor: pointer;
+  border-radius: 2px;
+}
+.btn-group button.active {
+  background-color: #ffb900;
+}
+</style>
+</head>
+<body>
+
+<div class="map-box">
+  <!-- 底层PNG底图 -->
+  <img class="map-base" src="base.png">
+  <!-- 上层点位svg，自动去除白底 -->
+  <img class="point-item" id="food" src="food.svg">
+  <img class="point-item" id="hotel" src="hotel.svg">
+  <img class="point-item" id="public" src="public.svg">
+</div>
+
+<div class="btn-group">
+  <button class="switch-btn active" data-target="food">餐饮</button>
+  <button class="switch-btn active" data-target="hotel">住宿</button>
+  <button class="switch-btn active" data-target="public">公共设施</button>
+</div>
+
+<script>
+const btns = document.querySelectorAll('.switch-btn');
+btns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    // 切换按钮高亮
+    btn.classList.toggle('active');
+    // 切换点位显示/隐藏
+    const targetId = btn.getAttribute('data-target');
+    document.getElementById(targetId).classList.toggle('hidden');
+  })
+})
+</script>
+
+</body>
+</html>
